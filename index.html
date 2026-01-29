@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>タスク対決</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  margin: 0;
+  background: #f5f5f5;
+}
+header {
+  background: #222;
+  color: white;
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+}
+button {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+}
+.container {
+  padding: 10px;
+}
+.hidden { display:none; }
+.task {
+  display:flex;
+  justify-content:space-between;
+  background:white;
+  margin:6px 0;
+  padding:10px;
+  border-radius:8px;
+}
+.calendar button {
+  margin:3px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <div>タスク対決</div>
+  <button onclick="toggleMenu()">☰</button>
+</header>
+
+<div class="container hidden" id="menu">
+  <button onclick="showHome()">🏠 今日</button>
+  <button onclick="showStats()">📊 グラフ</button>
+  <button onclick="showCalendar()">📅 カレンダー</button>
+</div>
+
+<div class="container" id="accountSelect">
+  <h2>アカウント選択</h2>
+  <button onclick="selectUser('りゅう')">りゅう</button>
+  <button onclick="selectUser('サシ')">サシ</button>
+</div>
+
+<div class="container hidden" id="home"></div>
+
+<div class="container hidden" id="stats">
+  <h3>合計点</h3>
+  <p>りゅう: <span id="totalRyu">0</span></p>
+  <p>サシ: <span id="totalSashi">0</span></p>
+  <canvas id="chart"></canvas>
+</div>
+
+<div class="container hidden" id="calendar"></div>
+
+<script>
+const tasks = [
+ "8時間寝る","運動","起きてから水を飲む","勉強",
+ "ファーストフードを食べない","健康的な食事","スキンケア"
+];
+
+const start = new Date(2026,0,28);
+const end   = new Date(2026,1,28);
+
+let currentUser = null;
+let currentDate = todayKey();
+
+function todayKey(){
+  const d=new Date();
+  return d.toISOString().slice(0,10);
+}
+
+function dateRange(){
+  let arr=[];
+  let d=new Date(start);
+  while(d<=end){
+    arr.push(d.toISOString().slice(0,10));
+    d.setDate(d.getDate()+1);
+  }
+  return arr;
+}
+
+function load(){
+  return JSON.parse(localStorage.getItem("data")||'{}');
+}
+function save(d){ localStorage.setItem("data",JSON.stringify(d)); }
+
+function score(count){
+  if(count===0) return 0;
+  if(count<=2) return 1;
+  if(count===4) return 3;
+  if(count===5) return 4;
+  if(count>=6) return 5;
+  return 0;
+}
+
+function selectUser(u){
+  currentUser=u;
+  document.getElementById("accountSelect").classList.add("hidden");
+  document.getElementById("menu").classList.remove("hidden");
+  showHome();
+}
+
+function toggleMenu(){
+  document.getElementById("menu").classList.toggle("hidden");
+}
+
+function showHome(){
+  hideAll();
+  renderTasks(currentDate);
+  document.getElementById("home").classList.remove("hidden");
+}
+
+function showStats(){
+  hideAll();
+  updateStats();
+  document.getElementById("stats").classList.remove("hidden");
+}
+
+function showCalendar(){
+  hideAll();
+  const cal=document.getElementById("calendar");
+  cal.innerHTML="";
+  dateRange().forEach(d=>{
+    const b=document.createElement("button");
+    b.textContent=d;
+    b.onclick=()=>{ currentDate=d; showHome(); };
+    cal.appendChild(b);
+  });
+  cal.classList.remove("hidden");
+}
+
+function hideAll(){
+  ["home","stats","calendar"].forEach(id=>{
+    document.getElementById(id).classList.add("hidden");
+  });
+}
+
+function renderTasks(date){
+  const home=document.getElementById("home");
+  home.innerHTML=`<h3>${date}</h3>`;
+  const data=load();
+  data[currentUser] ??={};
+  data[currentUser][date] ??=Array(7).fill(false);
+
+  data[currentUser][date].forEach((v,i)=>{
+    const div=document.createElement("div");
+    div.className="task";
+    div.innerHTML=`<span>${tasks[i]}</span>`;
+    const cb=document.createElement("input");
+    cb.type="checkbox";
+    cb.checked=v;
+    cb.onchange=()=>{
+      data[currentUser][date][i]=cb.checked;
+      save(data);
+      updateStats();
+    };
+    div.appendChild(cb);
+    home.appendChild(div);
+  });
+}
+
+let chart=null;
+
+function updateStats(){
+  const data=load();
+  const labels=dateRange();
+  const ryu=[],sashi=[];
+  let totalR=0,totalS=0;
+
+  labels.forEach(d=>{
+    const r=(data["りゅう"]?.[d]||[]).filter(v=>v).length;
+    const s=(data["サシ"]?.[d]||[]).filter(v=>v).length;
+    const rs=score(r), ss=score(s);
+    totalR+=rs; totalS+=ss;
+    ryu.push(totalR); sashi.push(totalS);
+  });
+
+  document.getElementById("totalRyu").textContent=totalR;
+  document.getElementById("totalSashi").textContent=totalS;
+
+  if(chart) chart.destroy();
+  chart=new Chart(document.getElementById("chart"),{
+    type:"line",
+    data:{
+      labels,
+      datasets:[
+        {label:"りゅう",data:ryu,borderColor:"blue"},
+        {label:"サシ",data:sashi,borderColor:"red"}
+      ]
+    }
+  });
+}
+</script>
+</body>
+</html>
